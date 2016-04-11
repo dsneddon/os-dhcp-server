@@ -1,0 +1,11 @@
+dhcp_config:
+  subnets:
+    -
+      type: subnet
+      name: test_subnet
+      ip_netmask: 192.0.2.0/24
+      gateway: 192.0.2.254
+      start_ip: 192.0.2.10
+      end_ip: 192.0.2.24
+      tftp: 192.0.2.1:8088
+      pxefile: inspector.ipxe

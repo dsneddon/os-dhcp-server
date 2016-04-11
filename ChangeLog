@@ -1,0 +1,12 @@
+CHANGES
+=======
+
+0.0.1
+-----
+
+* Initial commit
+
+0.0.2
+-----
+
+* Created cli.py, server.py, utils.py, version.py
