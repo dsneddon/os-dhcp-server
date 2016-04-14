@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class Route(object):
-    """Base class for network routes."""
+    """Base class for network routes"""
 
     def __init__(self, next_hop, ip_netmask="", default=False):
         self.next_hop = next_hop
@@ -38,18 +38,34 @@ class Route(object):
         return Route(next_hop, ip_netmask, default)
 
 
+class AddressRange(object):
+    """Base class for address ranges"""
+
+    def __init__(self, name=None, start_ip, end_ip):
+        self.name = name or ''
+        self.start_ip = start_ip
+        self.end_ip = end_ip
+        # Wrap exceptions so the user will know which IP address range failed
+        try:
+            self.ip_range = netaddr.IPRange(start_ip, end_ip)
+        except Exception as e:
+            logger.error("Error in IP range (start: %s, end: %s):%s" % \
+                         (self.start_ip, self.end_ip, e))
+            raise e
+
+
 class Subnet(object):
     """Base class for dhcp info for network subnets"""
 
-    def __init__(self, name=None, ip_netmask, gateway, start_ip, end_ip, tftp=None,
-                 pxefile=None):
+    def __init__(self, name=None, ip_netmask, gateway=None, address_ranges,
+                 tftp=None, pxefile=None):
         self.name = name or ''
         network = netaddr.IPNetwork(ip_netmask)
         self.net_addr = str(network.network)
+        # TODO(dsneddon) It'd be nice to make network broadcast configurable
         self.broadcast = str(network.broadcast)
-        self.gateway = gateway
-        self.start_ip = start_ip
-        self.end_ip = end_ip
+        self.gateway = gateway or ''
+        self.address_ranges = address_ranges or []
         self.tftp = tftp or ''
         self.pxefile = pxefile or ''
 
@@ -58,10 +74,8 @@ class Subnet(object):
         name = json.get('name')
         ip_netmask = json.get('ip_netmask')
         gateway = json.get('gateway')
-        start_ip = json.get('start_ip')
-        end_ip = json.get('end_ip')
+        address_ranges = json.get('address_ranges')
         tftp = json.get('tftp')
         pxefile = json.get('pxefile')
 
-        return Subnet(name, ip_netmask, gateway, start_ip,
-                      end_ip, tftp, pxefile)
+        return Subnet(name, ip_netmask, gateway, address_ranges, tftp, pxefile)

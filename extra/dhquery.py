@@ -78,15 +78,15 @@ def receivePacket(serverip, serverport, timeout, req):
     client = SilentClient(client_listen_port=67, server_listen_port=serverport)
     client.dhcp_socket.settimeout(timeout)
     if serverip == '0.0.0.0':
-        req.SetOption('flags', [128, 0])
-    req_type = req.GetOption('dhcp_message_type')[0]
+        req.set_option('flags', [128, 0])
+    req_type = req.get_option('dhcp_message_type')[0]
     client.SendDhcpPacketTo(serverip, req)
     # Don't wait answer for RELEASE message
     if req_type == 7:
         return None
     res = client.GetNextDhcpPacket()
     # Try next packet if this packet is the same as packet we've sent.
-    if res.GetOption('dhcp_message_type')[0] == req_type:
+    if res.get_option('dhcp_message_type')[0] == req_type:
         res = client.GetNextDhcpPacket()
     return res
 
@@ -111,7 +111,7 @@ def preparePacket(xid=None, giaddr='0.0.0.0', chaddr='00:00:00:00:00:00', ciaddr
     else:
         mt = 1
     req.SetOption('dhcp_message_type', [mt])
-    #	req.SetOption('parameter_request_list',1)
+    #	req.set_option('parameter_request_list',1)
     return req
 
 

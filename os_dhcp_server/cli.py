@@ -21,7 +21,7 @@ import sys
 import yaml
 
 from os_dhcp_server import version
-from os_dhcp_server import server
+from os_dhcp_server import network
 from os_dhcp_server import utils
 
 logger = logging.getLogger(__name__)

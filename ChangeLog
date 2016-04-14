@@ -10,3 +10,9 @@ CHANGES
 -----
 
 * Created cli.py, server.py, utils.py, version.py
+
+0.0.3
+-----
+
+* Created packet.py, added documentation on DHCP packet structure
+*

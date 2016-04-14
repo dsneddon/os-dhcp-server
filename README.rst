@@ -13,7 +13,7 @@ course.
 * Free software: Apache license
 # TODO (dsneddon) Create URLs for following:
 * Documentation:
-* Source:
+* Source: https://github.com/dsneddon/os-dhcp-server
 * Bugs:
 
 Features
