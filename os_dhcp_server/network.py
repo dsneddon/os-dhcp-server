@@ -21,7 +21,7 @@ import socket
 import select
 import binascii
 import logging
-from os_dhcp_server import packet
+from os_dhcp_server import dhcp_packet
 from os_dhcp_server import utils
 
 
@@ -153,6 +153,7 @@ class DhcpServer(object):
                 if not packet:
                     logger.error('Error processing received packet, '+
                                  'no data received')
+                packet.decode_packet()
             except KeyboardInterrupt:
                 return 0
 
@@ -167,6 +168,6 @@ class DhcpServer(object):
             return None
 
         if data:
-            packet = self.packet.DhcpPacket(data)
+            packet = dhcp_packet.DhcpPacket(data)
             packet.source_address = source_address
         return packet

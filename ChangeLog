@@ -14,5 +14,5 @@ CHANGES
 0.0.3
 -----
 
-* Created packet.py, added documentation on DHCP packet structure
-*
+* Created packet.py to handle encoding/decoding of DHCP packets
+* Created globals.py to contain constants, added documentation on DHCP packet structure
