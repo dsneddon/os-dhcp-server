@@ -41,7 +41,7 @@ class Route(object):
 class AddressRange(object):
     """Base class for address ranges"""
 
-    def __init__(self, name=None, start_ip, end_ip):
+    def __init__(self, start_ip, end_ip, name=None):
         self.name = name or ''
         self.start_ip = start_ip
         self.end_ip = end_ip
@@ -57,7 +57,7 @@ class AddressRange(object):
 class Subnet(object):
     """Base class for dhcp info for network subnets"""
 
-    def __init__(self, name=None, ip_netmask, gateway=None, address_ranges,
+    def __init__(self, ip_netmask, address_ranges, name=None, gateway=None,
                  tftp=None, pxefile=None):
         self.name = name or ''
         network = netaddr.IPNetwork(ip_netmask)

@@ -17,6 +17,6 @@
 version_info = "os-dhcp-server 0.0.1"
 
 #TODO(dsneddon) use PBR versioning
-#import pbr.version
+import pbr.version
 
-#version_info = pbr.version.VersionInfo('os-dhcp-server')
+version_info = pbr.version.VersionInfo('os-dhcp-server')

@@ -17,13 +17,15 @@
 import logging
 from struct import pack
 from struct import unpack
-from os_net_config import constants
+from os_dhcp_server import globals
 
 
 logger = logging.getLogger(__name__)
 
 
 def is_ipv4_list(ip_list):
+    pass
+    # TODO(dsneddon) Fix this...
     # Validate that ip_list is a list of IPs encoded as packed bytes
     while ip_list:
         # grab 4 octets, if we can
@@ -31,6 +33,8 @@ def is_ipv4_list(ip_list):
             try:
                 if int(ip_list.pop())>>32:
                     return False
+            except:
+                return False
     if isinstance(ip_list, list):
         for item in ip_list:
             if int(item)>>32: return False
@@ -53,17 +57,21 @@ class DhcpPacket(object):
 
     """ DHCP """
 
-    def __init__(self):
+    def __init__(self, data=None):
         self.source_address = False
         self.init_packet()
         self.dhcp_options = {}
+        if data:
+            self.packet_data = data
+        else:
+            self.init_packet()
         logger.info("DhcpPacket class created")
 
 
     def init_packet(self):
         ''' Initialize a blank DHCP packet '''
         self.packet_data = [0]*240
-        self.packet_data[236:240] = globals.MagicCookie
+        self.packet_data[236:240] = globals.MAGIC_COOKIE
         logger.debug("Initializing blank DHCP packet")
 
 
@@ -71,13 +79,20 @@ class DhcpPacket(object):
         ''' Return location after MagicCookie, or None if not found '''
 
         # Sometimes it's right where you expect it
-        if self.packet_data[236:240] == globals.MagicCookie:
+        unpack_fmt = "4c"
+        decoded_chars = [ord(i) for i in unpack(unpack_fmt,
+                                                self.packet_data[236:240])]
+        print "Magic Cookie Expected location value %s" % decoded_chars
+        if decoded_chars == globals.MAGIC_COOKIE:
             logger.debug("DHCP packet received, contains MagicCookie")
-            return 236
+            return 240
         else:
             # search the entire packet, but not past packet end
-            for i in range(237,len(packet_data)-4):
-                if self.packet_data[i:i+4] == globals.MAGIC_COOKIE:
+            for i in range(237,len(self.packet_data)-4):
+                decoded_chars = [ord(i) for i in unpack(unpack_fmt,
+                                                        self.packet_data[
+                                                        i:i+4])]
+                if decoded_chars == globals.MAGIC_COOKIE:
                     logger.debug("DHCP packet received, contains MagicCookie")
                     return i+4
             return None  # not found
@@ -101,8 +116,8 @@ class DhcpPacket(object):
         if name in globals.DHCP_FIELDS:
             # boundary validation
             if len(value) != globals.DHCP_FIELDS[name]['len']:
-                logger.error("DhcpPacket.set_option bad option length: %s" %
-                             name)
+                logger.error("DhcpPacket.set_option option %s bad length: %s" %
+                             (name, value))
                 return False
             begin = globals.DHCP_FIELDS[name]['pos']
             end = globals.DHCP_FIELDS[name]['pos'] +\
@@ -112,6 +127,16 @@ class DhcpPacket(object):
             self.packet_data[begin:end] = value
             return True
         elif name in globals.DHCP_OPTIONS:
+            option_number = globals.DHCP_OPTIONS.index(name)
+            option = globals.DHCP_OPTION_TYPES[option_number]
+            # boundary validation
+            if len(value) > option[max] or len(value) < option[min]:
+                logger.error("DhcpPacket.set_option option %s bad length: %s" %
+                             (name, value))
+                return False
+            logger.debug("DHCP option set, name: %s, value: %s" %
+                         (name, value))
+
 
     def sort_options(self):
         """ Return the DHCP options in sorted order """
@@ -128,24 +153,25 @@ class DhcpPacket(object):
         return option_list
 
 
-    def decode_packet(self, packet):
+    def decode_packet(self):
         """ Unpack the packet and lookup the option values """
 
-        self.packet_data = []
+        self.packet_decoded = []
         self.dhcp_options = {}
 
-        if not packet:
+        if not self.packet_data:
             logger.debug("Empty packet received, discarding...")
             return
 
         # treat the packet like a list of ints representing chars
-        unpack_fmt = str(len(packet)) + "c"
-        self.packet_data = [ord(i) for i in unpack(unpack_fmt,packet)]
+        unpack_fmt = str(len(self.packet_data)) + "c"
+        self.packet_decoded = [ord(i) for i in unpack(unpack_fmt,
+                                                      self.packet_data)]
         # TODO(dsneddon) replace this with a human-readable packet decode
-        logger.debug("Raw packet decoded: \n%s\n" % self.packet_data)
+        logger.debug("Raw packet decoded: \n%s\n" % self.packet_decoded)
 
         location = self.get_option_start()
-        if not locaion:
+        if not location:
             logger.info("Magic Cookie not found, not a valid DHCP packet")
             return
 
@@ -154,16 +180,16 @@ class DhcpPacket(object):
                 logger.debug("DHCP Option End reached at byte %d" % location)
                 return
 
-            elif self.packet_data[location] == 0; # pad byte
+            elif self.packet_data[location] == 0: # pad byte
                 location += 1
 
             else:
-                option = globals.DHCP_OPTIONS[self.packet_data[location]]
+                option = globals.DHCP_OPTIONS[self.packet_decoded[location]]
                 #TODO(dsneddon) lookup field type for data validation
-                length = self.packet_data[location+1]
+                length = self.packet_decoded[location+1]
                 start = location + 2
                 end = start + length
-                self.dhcp_options[self.packet_data[location]] = self.packet_data[start:end+1]
+                self.dhcp_options[option] = self.packet_data[start:end+1]
             return
 
     def encode_packet(self):
@@ -190,4 +216,5 @@ class DhcpPacket(object):
         print "--------------------DHCP Packet--------------------"
 
         for option in self.sort_options():
-            print "option: %s   value: %s" % (option)
+            return "option: %s   value: %s" % (option,
+                                              self.dhcp_options[option])

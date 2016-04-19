@@ -17,12 +17,12 @@
 
 import argparse
 import logging
+import os
 import sys
 import yaml
 
 from os_dhcp_server import version
-from os_dhcp_server import network
-from os_dhcp_server import utils
+from os_dhcp_server import server
 
 logger = logging.getLogger(__name__)
 
@@ -84,19 +84,21 @@ def main(argv=sys.argv):
     # Read config file containing network configs to apply
     if os.path.exists(opts.config_file):
         with open(opts.config_file) as cf:
-            subnet_array = yaml.load(cf.read()).get("subnets")
-            logger.debug('subnets JSON: %s' % str(iface_array))
+            dhcp_config = yaml.load(cf.read()).get("dhcp_config")
+            logger.debug('DHCP config: %s' % str(dhcp_config))
     else:
         logger.error('No config file exists at: %s' % opts.config_file)
         return 1
 
-    if not isinstance(subnet_array, list):
-        logger.error('No subnets defined in config: %s' % opts.config_file)
-        return 1
+    #if not isinstance(subnet_array, list):
+    #    logger.error('No subnets defined in config: %s' % opts.config_file)
+    #    return 1
 
-    dhcp_server = server.DhcpServer('0.0.0.0', 67, subnet, opts.verbose, opts.debug)
+    dhcp_server = server.DhcpServer('0.0.0.0', 67, opts.verbose, opts.debug)
 
-    return dhcp_server(listen)
+    dhcp_server.create_socket()
+    dhcp_server.bind_socket()
+    return dhcp_server.listen()
 
 
     if __name__ == '__main__':
