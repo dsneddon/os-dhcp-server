@@ -41,13 +41,13 @@ def unpack_ipv4_list(byte_pattern):
         # if there are at least 4 octets, add them as an IP to the list
         ip_string = ''
         for i in range(0,3):
-            ip_string += str(ord(byte_pattern.pop())) + "."
-        ip_string += str(ord(byte_pattern.pop()))
+            ip_string += str(byte_pattern.pop()) + "."
+        ip_string += str(byte_pattern.pop())
         ip_list.append(ip_string)
     return ip_list
 
 
-def get_dhcp_option(option):
+def get_option_name_id(option):
     """ Return name if given ID, or ID if given name"""
 
     if isinstance(option, int):
@@ -211,6 +211,7 @@ class DhcpPacket(object):
 
 
     def get_option(self, name):
+        """ Get DHCP options (including fields)"""
         if name in globals.DHCP_FIELDS:
             field = globals.DHCP_FIELDS[name]
             value = self.packet_data[field['pos']:field['pos']+field['len']]

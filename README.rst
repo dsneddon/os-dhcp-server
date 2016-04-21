@@ -32,6 +32,11 @@ deployed in multiple routed subnets with DHCP relays or proxies.
 
  * A python library which provides configuration via an object model.
 
+A custom DHCP server may also allow for real hardware discovery in the future,
+where nodes are added to Ironic as soon as they are first booted and request
+a DHCP address. We might even be able to get rid of a separate introspection
+step, if nodes were introspected as soon as they were discovered.
+
 YAML Config Examples
 --------------------
  * Configure a set of subnets and address ranges

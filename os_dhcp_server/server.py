@@ -16,10 +16,8 @@
 
 import os
 import sys
-import IN
 import socket
 import select
-import binascii
 import logging
 from os_dhcp_server import dhcp_packet
 from os_dhcp_server import utils
@@ -95,7 +93,8 @@ class DhcpServer(object):
 
     def receive(self):
         """Main loop for processing DHCP packets"""
-        timeout = 120
+        # if timeout is set, a blank packet is received at the end of timeout
+        timeout = 0
         data_in, data_out, data_except = select.select([self.dhcp_socket],
                                                        [], [], timeout)
 
@@ -113,20 +112,13 @@ class DhcpServer(object):
 
         while 1:  # main loop
             try:
-                # original listen block from sdhcpd.py
-                # message, addressf = s.recvfrom(8192)
-                # if not message.startswith('\x01') and not addressf[0] == '0.0.0.0':
-                #    continue  # only serve if a dhcp request
-                # data = reqparse(message)  # handle request
-                # if data:
-                #    s.sendto(data, ('<broadcast>', 68))  # reply
-                # release()  # update releases table
                 packet = self.receive()
                 if not packet:
                     logger.error('Error processing received packet, ' +
                                  'no data received')
                 else:
                     packet.decode_packet()
-                    logger.debug("DHCP Packet Received:\n%s" % packet.dhcp_options)
+                    logger.debug("DHCP Packet Received from %s:\n%s" %
+                                 (packet.source_address, packet.dhcp_options))
             except KeyboardInterrupt:
                 return 0
