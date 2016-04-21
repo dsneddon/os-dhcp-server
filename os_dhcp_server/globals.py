@@ -154,6 +154,10 @@
     counter for the situation.
 """
 
+TRUE_VALUES = ('True', 'true', '1', 'yes', 'one')
+
+FALSE_VALUES = ('False', 'false', '0', 'no', 'None', 'none', 'zero')
+
 MAGIC_COOKIE = [99,130,83,99]
 
 # Header field information taken from:
@@ -163,15 +167,15 @@ DHCP_FIELDS = {'op':{'pos':0, 'len':1, 'type': 'int'},
                 'hlen':{'pos':2, 'len':1, 'type': 'int'},
                 'hops':{'pos':3, 'len':1, 'type': 'int'},
                 'xid':{'pos':3, 'len':4, 'type': 'int32'},
-                'secs':{'pos':8, 'len':2, 'type': 'int2'},
-                'flags':{'pos':10, 'len':2, 'type':'int2'},
+                'secs':{'pos':8, 'len':2, 'type': 'int16'},
+                'flags':{'pos':10, 'len':2, 'type':'int16'},
                 'ciaddr':{'pos':12, 'len':4, 'type':'int32'},
                 'yiaddr':{'pos':16, 'len':4, 'type':'int32'},
                 'siaddr':{'pos':20, 'len':4, 'type':'int32'},
                 'giaddr':{'pos':24, 'len':4, 'type':'int32'},
                 'chaddr':{'pos':28, 'len':16, 'type':'hwmacaddr'},
-                'sname':{'pos':44, 'len':64, 'type':'str'},
-                'file':{'pos':108, 'len':128, 'type':'str'}
+                'sname':{'pos':44, 'len':64, 'type':'string'},
+                'file':{'pos':108, 'len':128, 'type':'string'}
                }
 
 DHCP_OPCODES = { '0': 'ERROR_UNDEF', '1' : 'BOOTREQUEST' , '2' : 'BOOTREPLY'}
@@ -261,19 +265,20 @@ DHCP_OPTIONS = ['pad',
                  '250','251','252','253','254'
                 ]
 
+# TODO(dsneddon) - create type for policy_filter, which is multiples of 8 bytes
 DHCP_OPTION_TYPES = {
     0: {'max': 0, 'type': 'none', 'name': 'pad', 'min': 0},
-    1: {'max': 4, 'type': 'int32', 'name': 'subnet_mask', 'min': 4},
+    1: {'max': 4, 'type': '[ipv4]', 'name': 'subnet_mask', 'min': 4},
     2: {'max': 4, 'type': 'int32', 'name': 'time_offset', 'min': 4},
-    3: {'max': 4, 'type': 'ipv4', 'name': 'router', 'min': 4},
-    4: {'max': 4, 'type': 'ipv4', 'name': 'time_server', 'min': 4},
-    5: {'max': 4, 'type': 'ipv4', 'name': 'name_server', 'min': 4},
-    6: {'max': 4, 'type': 'ipv4', 'name': 'domain_name_server', 'min': 4},
-    7: {'max': 4, 'type': 'ipv4', 'name': 'log_server', 'min': 4},
-    8: {'max': 4, 'type': 'ipv4', 'name': 'cookie_server', 'min': 4},
-    9: {'max': 4, 'type': 'ipv4', 'name': 'lpr_server', 'min': 4},
-    10: {'max': 4, 'type': 'ipv4', 'name': 'impress_server', 'min': 4},
-    11: {'max': 4, 'type': 'ipv4', 'name': 'resource_location_server',
+    3: {'max': 0, 'type': '[ipv4]', 'name': 'router', 'min': 4},
+    4: {'max': 0, 'type': '[ipv4]', 'name': 'time_server', 'min': 4},
+    5: {'max': 0, 'type': '[ipv4]', 'name': 'name_server', 'min': 4},
+    6: {'max': 0, 'type': '[ipv4]', 'name': 'domain_name_server', 'min': 4},
+    7: {'max': 0, 'type': '[ipv4]', 'name': 'log_server', 'min': 4},
+    8: {'max': 0, 'type': '[ipv4]', 'name': 'cookie_server', 'min': 4},
+    9: {'max': 0, 'type': '[ipv4]', 'name': 'lpr_server', 'min': 4},
+    10: {'max': 0, 'type': '[ipv4]', 'name': 'impress_server', 'min': 4},
+    11: {'max': 0, 'type': '[ipv4]', 'name': 'resource_location_server',
          'min': 4},
     12: {'max': 0, 'type': 'string', 'name': 'host_name', 'min': 1},
     13: {'max': 2, 'type': 'int16', 'name': 'boot_file', 'min': 2},
@@ -284,10 +289,12 @@ DHCP_OPTION_TYPES = {
     18: {'max': 0, 'type': 'string', 'name': 'extensions_path', 'min': 1},
     19: {'max': 1, 'type': 'bool', 'name': 'ip_forwarding', 'min': 1},
     20: {'max': 1, 'type': 'bool', 'name': 'nonlocal_src_routing', 'min': 1},
-    21: {'max': 4, 'type': 'ipv4', 'name': 'policy_filter', 'min': 4}, 22: {
-        'max': 2, 'type': 'int16', 'name': 'max_dgram_reassem_size', 'min': 2},
-    23: {'max': 0, 'type': 'char', 'name': 'default_ip_ttl', 'min': 0}, 24: {
-        'max': 4, 'type': 'int32', 'name': 'path_mtu_aging_timeout', 'min': 4},
+    21: {'max': 0, 'type': 'ipv4', 'name': 'policy_filter', 'min': 8},
+    22: {'max': 2, 'type': 'int16', 'name': 'max_dgram_reassem_size',
+         'min': 2},
+    23: {'max': 0, 'type': 'char', 'name': 'default_ip_ttl', 'min': 0},
+    24: {'max': 4, 'type': 'int32', 'name': 'path_mtu_aging_timeout',
+         'min': 4},
     25: {'max': 2, 'type': 'int16', 'name': 'path_mtu_table', 'min': 2},
     26: {'max': 2, 'type': 'int16', 'name': 'interface_mtu', 'min': 2},
     27: {'max': 1, 'type': 'bool', 'name': 'all_subnets_local', 'min': 1},
