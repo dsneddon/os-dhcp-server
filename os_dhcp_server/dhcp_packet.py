@@ -15,11 +15,13 @@
 # under the License.
 
 import logging
+import re
+import binascii
 from struct import pack
 from struct import unpack
 from netaddr import IPAddress
 from netaddr.core import AddrFormatError
-from os_dhcp_server import globals
+from os_dhcp_server import globals as dhcp
 
 
 logger = logging.getLogger(__name__)
@@ -40,7 +42,7 @@ def unpack_ipv4_list(byte_pattern):
     while len(byte_pattern) > 3:
         # if there are at least 4 octets, add them as an IP to the list
         ip_string = ''
-        for i in range(0,3):
+        for i in range(0, 3):
             ip_string += str(byte_pattern.pop()) + "."
         ip_string += str(byte_pattern.pop())
         ip_list.append(ip_string)
@@ -51,9 +53,9 @@ def get_option_name_id(option):
     """ Return name if given ID, or ID if given name"""
 
     if isinstance(option, int):
-        return constants.DHCP_OPTIONS[option]
+        return dhcp.DHCP_OPTIONS[option]
     else:
-        return constants.DHCP_OTIONS.index(option)
+        return dhcp.DHCP_OPTIONS.index(option)
 
 
 class DhcpPacket(object):
@@ -63,76 +65,79 @@ class DhcpPacket(object):
 
     def __init__(self, data=None):
         self.source_address = False
-        self.init_packet()
         self.dhcp_options = {}
         if data:
             if isinstance(data, list):
                 self.packet_data = data
+            if isinstance(data, str):
+                self.raw_packet_data = data
                 self.decode_packet()
         else:
             self.init_packet()
         logger.info("DhcpPacket class created")
 
-
     def init_packet(self):
-        ''' Initialize a blank DHCP packet '''
+        """ Initialize a blank DHCP packet """
         self.packet_data = [0]*240
-        self.packet_data[236:240] = globals.MAGIC_COOKIE
+        self.packet_data[236:240] = dhcp.MAGIC_COOKIE
         logger.debug("Initializing blank DHCP packet")
 
-
     def get_option_start(self):
-        ''' Return location after MagicCookie, or None if not found '''
+        """ Return location after MagicCookie, or None if not found """
 
         # Sometimes it's right where you expect it
-        if self.packet_data[236:240] == globals.MAGIC_COOKIE:
+        if self.packet_data[236:240] == dhcp.MAGIC_COOKIE:
             logger.debug("DHCP packet received, contains MagicCookie")
             return 240
         else:
             # search the entire packet, but not past packet end
-            for i in range(237,len(self.packet_data)-3):
-                if self.packet_data[i:i+4] == globals.MAGIC_COOKIE:
+            for i in range(237, len(self.packet_data) - 3):
+                if self.packet_data[i:i+4] == dhcp.MAGIC_COOKIE:
                     logger.debug("DHCP packet received, contains MagicCookie")
                     return i+4
             return None  # not found
 
-
     def int32_to_octets(self, value):
         """ Given an int or long, return a 4-byte array of 8-bit ints."""
 
-        new_value = [int(value >> 24 & 0xFF)]
-        new_value.append(int(value >> 16 & 0xFF))
-        new_value.append(int(value >> 8 & 0xFF))
-        new_value.append(int(value & 0xFF))
-        return new_value
+        return [int(value >> 24 & 0xFF), int(value >> 16 & 0xFF),
+                int(value >> 8 & 0xFF), int(value & 0xFF)]
 
-
-    def value_to_bytelist(self, type, value):
+    def value_to_bytelist(self, optype, value):
         """ Given a field or option type, format the value as a list with a
             length that matches the given type.
 
-        :param type: The object type, which is one of: int, int16, int32, bool,
-            char, char+, string, or an RFC-defined type.
+        :param optype: The object type, which is one of: int, int16, int32,
+            bool, char, char+, string, or an RFC-defined type.
         :param value: The value on which to enforce type.
 
         :returns: value after type enforcement"""
-        if type == 'int':
+        if optype == 'int':
             if isinstance(value, int):
-                value = [value]
+                if (value < 0) or (value > 255):
+                    return False
+                else:
+                    return [value]
             if isinstance(value, list):
                 if len(value) != 1:
                     return False
+                i = value[0]
                 if (not isinstance(i, int)) or (i < 0) or (i > 255):
                     return False
+                else:
+                    return value
             elif isinstance(value, str):
-                if len(value) != 1:
+                try:
+                    int_value = int(value)
+                except ValueError:
                     return False
-                value = [int(value)]
-        elif type == 'int16':
+                if (int_value < 0) or (int_value > 255):
+                    return False
+                else:
+                    return [int_value]
+        elif optype == 'int16':
             if isinstance(value, int):
-                new_value = [int(value >> 8 & 0xFF)]
-                new_value.append(int(value & 0xFF))
-                value = new_value
+                return [int(value >> 8 & 0xFF), int(value & 0xFF)]
             if isinstance(value, list):
                 if len(value) != 2:
                     return False
@@ -145,10 +150,10 @@ class DhcpPacket(object):
                 new_value = []
                 for i in value:
                     new_value.append(int(i))
-                value = new_value
-        elif type == 'int32':
+                return new_value
+        elif optype == 'int32':
             if isinstance(value, int):
-                value = self.int32_to_octets(value)
+                return self.int32_to_octets(value)
             if isinstance(value, list):
                 if len(value) != 4:
                     return False
@@ -161,40 +166,39 @@ class DhcpPacket(object):
                 new_value = []
                 for i in value:
                     new_value.append(int(i))
-                value = new_value
-        elif type == 'bool':
-            if isinstance(value, bool):
+                return new_value
+        elif optype == 'bool':
+            if (isinstance(value, bool)) or (isinstance(value, int)):
                 if value:
-                    value = [1]
+                    return [1]
                 else:
-                    value = [0]
-            elif isinstance(value, int):
-                value = [value]
+                    return [0]
             elif isinstance(value, str):
-                if value in globals.TRUE_VALUES:
-                    value = [1]
-                elif value in globals.FALSE_VALUES:
-                    value = [0]
+                if value in dhcp.TRUE_VALUES:
+                    return [1]
+                elif value in dhcp.FALSE_VALUES:
+                    return [0]
                 else:
                     return False
-        elif type == 'ipv4':
+        elif optype == 'ipv4':
             if isinstance(value, int):
-                value = self.int32_to_octets(value)
-            if isinstance(value, str):
+                return self.int32_to_octets(value)
+            elif isinstance(value, str):
                 try:
                     ip_addr = IPAddress(value.strip())
                 except AddrFormatError:
+                    logger.error("Could not parse IP address: %s" % value)
                     return False
-                value = self.int32_to_octets(int(ip_addr))
-            if isinstance(value, IPAddress):
-                value = self.int32_to_octets(int(value))
-        elif type == '[ipv4]':
+                return self.int32_to_octets(int(ip_addr))
+            elif isinstance(value, IPAddress):
+                return self.int32_to_octets(int(value))
+        elif optype == '[ipv4]':
             if isinstance(value, list):
                 new_value = []
                 for ip in value:
-                    ip_octets = self.value_to_type('ipv4', ip)
+                    ip_octets = self.value_to_bytelist('ipv4', ip)
                     new_value.extend(ip_octets)
-                value = new_value
+                return new_value
             elif isinstance(value, str):
                 new_value = []
                 for ip in value.split(','):
@@ -204,26 +208,116 @@ class DhcpPacket(object):
                         return False
                 for octet in self.int32_to_octets(int(ip_addr)):
                     new_value.append(octet)
-                value = new_value
+                return new_value
             else:
                 return False
-        return value
+        elif optype == 'string':
+            return list(str(value))
+        elif optype == 'identifier' or optype == 'hwmacaddr':  # see RFC6842
+            # Deal with MAC addresses or optype (01 is Ethernet) plus MAC
+            if isinstance(value, str):
+                macaddr = re.compile(r'([0-9A-F]{2}[:-]){5}([0-9A-F]{2})',
+                                     re.IGNORECASE)
+                macaddr_type = re.compile(r'01:([0-9A-F]{2}[:-]){5}'
+                                          r'([0-9A-F]{2})', re.IGNORECASE)
+                if macaddr.match(value) or macaddr_type.match(value):
+                    mac_raw = ''.join(value.split(':'))  # strip the colons
+                    # Convert the remaining hex to bytes
+                    return [ord(i) for i in binascii.unhexlify(mac_raw)]
+                else:
+                    return [ord(i) for i in value]
+            elif isinstance(value, list):
+                return value
+        logger.error("Type not implemented: %s" % optype)
+        return False
 
+    def bytelist_to_value(self, optype, bytelist):
+        """ Given a series of bytes, return a human-readable value based on
+            the option type. Does the reverse of value_to_bytelist.
+
+        :param optype: The object type, which is one of: int, int16, int32,
+            bool, char, char+, string, or an RFC-defined type.
+        :param bytelist: The list of bytes to convert to a readable format.
+
+        :returns: value after type conversion"""
+
+        if optype == 'int':
+                return int(bytelist[0])
+        elif optype == 'int16':
+            if len(bytelist) != 2:
+                logger.debug("Could not convert %s bytes to int16")
+                return False
+            new_value = bytelist[0] * 256
+            new_value += bytelist[1]
+            return new_value
+        elif optype == 'int32':
+            if len(bytelist) > 4:
+                logger.error("Could not convert %s bytes to int32" %
+                             len(bytelist))
+                return False
+            new_value = bytelist[0] * 256 * 256 * 256
+            new_value += bytelist[1] * 256 * 256
+            new_value += bytelist[2] * 256
+            new_value += bytelist[3]
+            return new_value
+        elif optype == 'bool':
+            if bytelist in dhcp.TRUE_VALUES:
+                return 'True'
+            else:
+                return 'False'
+        elif optype == 'ipv4':
+            if len(bytelist) != 4:
+                logger.error("Could not convert %s to IPv4 address" %
+                             bytelist)
+                return False
+            else:
+                return '{}.{}.{}.{}'.format((bytelist[0], bytelist[1],
+                                             bytelist[2], bytelist[3]))
+        elif optype == '[ipv4]':
+            if len(bytelist) < 4:
+                logger.error("Could not convert %s to a list of IPs" %
+                             bytelist)
+                return False
+            else:
+                new_value = ''
+                while len(bytelist) > 3:
+                    if new_value:         # if there is already at least 1 IP,
+                        new_value += ','  # append a comma between addresses
+                    new_value += '{}.{}.{}.{}'.format((bytelist[0],
+                                                       bytelist[1],
+                                                       bytelist[2],
+                                                       bytelist[3]))
+                return new_value
+        elif optype == 'string':
+            return ''.join(chr(byte) for byte in bytelist)
+        elif optype == 'identifier':
+            if (len(bytelist) == 7) and (bytelist[0] == 1):  # MAC address
+                return ':'.join('{:02x}'.format(x) for x in bytelist)
+            else:
+                return ''.join('{}'.format(chr(x)) for x in bytelist)
+        else:
+            return bytelist
+
+    def get_option_number(self, name):
+        """ Get the DHCP option number from the name. """
+
+        return dhcp.DHCP_OPTIONS.index(name)
 
     def get_option(self, name):
         """ Get DHCP options (including fields)"""
-        if name in globals.DHCP_FIELDS:
-            field = globals.DHCP_FIELDS[name]
+        if name in dhcp.DHCP_FIELDS:
+            field = dhcp.DHCP_FIELDS[name]
             value = self.packet_data[field['pos']:field['pos']+field['len']]
             logger.debug("DHCP option retrieved, name: %s, value: %s" %
                          (name, value))
             return value
         # Option being set is not one of the main fields
-        elif self.dhcp_options.has_key(name):
-            return self.dhcp_options[name]
+        elif name in self.dhcp_options:
+            option_num = self.get_option_number(name)
+            option_type = dhcp.DHCP_OPTION_TYPES[option_num]['type']
+            return self.bytelist_to_value(option_type, self.dhcp_options[name])
         else:
             return []
-
 
     def set_option(self, name, value):
         """ Set DHCP options (including fields)
@@ -242,23 +336,22 @@ class DhcpPacket(object):
             :returns: True or False to indicate success, failure will be logged
         """
 
-        if name in globals.DHCP_FIELDS:
+        if name in dhcp.DHCP_FIELDS:
             if isinstance(value, list):
                 # boundary validation
-                if len(value) != globals.DHCP_FIELDS[name]['len']:
-                    logger.error("DhcpPacket.set_option option %s bad length: %s" %
+                if len(value) != dhcp.DHCP_FIELDS[name]['len']:
+                    logger.error("DhcpPacket option %s bad length: %s" %
                                  (name, value))
                     return False
-            begin = globals.DHCP_FIELDS[name]['pos']
-            end = globals.DHCP_FIELDS[name]['pos'] +\
-                  globals.DHCP_FIELDS[name]['len']
+            begin = dhcp.DHCP_FIELDS[name]['pos']
+            end = dhcp.DHCP_FIELDS[name]['pos'] + dhcp.DHCP_FIELDS[name]['len']
             self.packet_data[begin:end] = [value]
             logger.debug("DHCP field set, name: %s, value: %s" %
                          (name, value))
             return True
-        elif name in globals.DHCP_OPTIONS:
-            option_number = globals.DHCP_OPTIONS.index(name)
-            option = globals.DHCP_OPTION_TYPES[option_number]
+        elif name in dhcp.DHCP_OPTIONS:
+            option_number = dhcp.DHCP_OPTIONS.index(name)
+            option = dhcp.DHCP_OPTION_TYPES[option_number]
             # boundary validation
             byte_values = self.value_to_bytelist(option['type'], value)
             if len(byte_values) < option['min']:
@@ -274,7 +367,6 @@ class DhcpPacket(object):
             logger.debug("DHCP option set, name: %s, value: %s" %
                          (name, value))
 
-
     def sort_options(self):
         """ Return a list of the DHCP options in order by option number """
 
@@ -282,7 +374,7 @@ class DhcpPacket(object):
         ord_options = {}
         for option in self.dhcp_options.keys():
             # Options must be set in order according to RFC
-            order = globals.DHCP_OPTIONS.index(option)
+            order = dhcp.DHCP_OPTIONS.index(option)
             # DCHP requires the option ID, length, and data concatenated
             ord_options[order] = (option, self.dhcp_options[option])
         for option in sorted(ord_options.keys()):
@@ -290,7 +382,6 @@ class DhcpPacket(object):
                                 ord_options[option][0],
                                 ord_options[option][1]])
         return option_list
-
 
     def pack_packet(self, packet):
         """ Packs the packet using struct.pack to prepare to send on wire """
@@ -300,20 +391,21 @@ class DhcpPacket(object):
         return pack(pack_fmt, *packet)
 
     def decode_packet(self):
-        """ Unpack the packet and lookup the option values """
+        """ Unpack the packet and lookup the option values. An option has the
+            format option number (1 byte), length (1 byte), and data. """
 
         self.dhcp_options = {}
 
-        if not self.packet_data:
+        if not self.raw_packet_data:
             logger.debug("Empty packet received, discarding...")
             return
 
         # treat the packet like a list of ints representing chars
-        #unpack_fmt = str(len(self.packet_data)) + "c"
-        #self.packet_decoded = [ord(i) for i in unpack(unpack_fmt,
-        #                                              self.packet_data)]
+        unpack_fmt = str(len(self.raw_packet_data)) + "c"
+        self.packet_data = [ord(i) for i in unpack(unpack_fmt,
+                                                   self.raw_packet_data)]
         # TODO(dsneddon) replace this with a human-readable packet decode
-        #logger.debug("Raw packet decoded: \n%s\n" % self.packet_decoded)
+        logger.debug("Raw packet decoded: \n%s\n" % self.packet_data)
 
         location = self.get_option_start()
         if not location:
@@ -323,24 +415,27 @@ class DhcpPacket(object):
         while location < len(self.packet_data):
             if self.packet_data[location] == 255:
                 logger.debug("DHCP Option End reached at byte %d" % location)
-                return
-
-            elif self.packet_data[location] == 0: # pad byte
-                location += 1
                 break
-
+            elif self.packet_data[location] == 0:  # pad byte
+                location += 1
             else:
-                option = globals.DHCP_OPTIONS[self.packet_data[location]]
-                #TODO(dsneddon) lookup field type for data validation
+                option = dhcp.DHCP_OPTIONS[self.packet_data[location]]
+                # TODO(dsneddon) lookup field type for data validation
                 length = self.packet_data[location+1]
                 start = location + 2
                 end = start + length
+                #logger.debug("option: %s length: %s data %s" %
+                #             (option, length, self.packet_data[start:end]))
                 self.dhcp_options[option] = self.packet_data[start:end]
-            return
+                location = end
 
+        for option in self.dhcp_options:
+            logger.debug("option: %s value: %s" %
+                         (option, self.get_option(option)))
 
     def encode_packet(self):
-        """ Set the options and pack the packet """
+        """ Set the options and pack the packet. An option has an option
+            number, followed by length, followed by data. """
 
         ord_options = self.sort_options()
         logger.debug("Options to encode: %s" % ord_options)
@@ -355,13 +450,12 @@ class DhcpPacket(object):
         self.packet_data[240:] = option_data
         self.packet_data.append(255)  # add end option
 
-
     def str(self):
         """ Return a human-readable decode of the packet"""
 
-        str_rep = "--------------------DHCP Packet--------------------"
+        str_rep = "--------------------DHCP Packet--------------------\n"
 
         for option in self.sort_options():
             str_rep += "option: %s   value: %s\n" % (option,
-                                              self.dhcp_options[option])
+                                                     self.dhcp_options[option])
         return str_rep

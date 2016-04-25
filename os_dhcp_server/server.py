@@ -93,10 +93,8 @@ class DhcpServer(object):
 
     def receive(self):
         """Main loop for processing DHCP packets"""
-        # if timeout is set, a blank packet is received at the end of timeout
-        timeout = 0
         data_in, data_out, data_except = select.select([self.dhcp_socket],
-                                                       [], [], timeout)
+                                                       [], [])
 
         if (data_in != []):
             (data, source_address) = self.dhcp_socket.recvfrom(8192)
@@ -118,7 +116,5 @@ class DhcpServer(object):
                                  'no data received')
                 else:
                     packet.decode_packet()
-                    logger.debug("DHCP Packet Received from %s:\n%s" %
-                                 (packet.source_address, packet.dhcp_options))
             except KeyboardInterrupt:
                 return 0
