@@ -46,10 +46,16 @@ class TestDhcpPacket(base.TestCase):
     def tearDown(self):
         super(TestDhcpPacket, self).tearDown()
 
-    def test_is_ipv4_list(self):
+    def test_pack_ipv4_bytes(self):
         ipv4_list = ["192.168.0.1", "10.0.0.1", "192.168.0.2"]
         ipv4_octets = [192, 168, 0, 1, 10, 0, 0, 1, 192, 168, 0, 2]
-        self.assertEqual(ipv4_list, dhcp_packet.unpack_ipv4_list(ipv4_octets))
+        self.assertEqual(ipv4_list, dhcp_packet.unpack_ipv4_bytes(ipv4_octets))
+
+    def test_unpack_ipv4_bytes(self):
+        ipv4_list = ["192.168.0.1", "10.0.0.1", "192.168.0.2"]
+        ipv4_octets = [192, 168, 0, 1, 10, 0, 0, 1, 192, 168, 0, 2]
+        self.assertEqual(ipv4_octets,
+                         dhcp_packet.value_to_bytelist('[ipv4]', ipv4_list))
 
     def test_create_packet(self):
         packet = dhcp_packet.DhcpPacket()
@@ -76,9 +82,10 @@ class TestDhcpPacket(base.TestCase):
         # First, test getting options from a raw decoded packet
         packet = dhcp_packet.DhcpPacket(_DHCP_PACKET_WITH_OPTIONS)
         self.assertEqual([4], packet.get_option('hops'))
-        self.assertEqual([255, 255, 255, 0], packet.get_option('subnet_mask'))
-        packet.set_option('router', "10.0.0.1")
-        self.assertEqual([10, 0, 0, 1], packet.get_option('router'))
+        packet.set_option('router', '10.0.0.1')
+        self.assertEqual('10.0.0.1', packet.get_option('router'))
+        packet.decode_packet()
+        self.assertEqual('255.255.255.0', packet.get_option('subnet_mask'))
 
     def test_set_dhcp_option(self):
         packet = dhcp_packet.DhcpPacket()
