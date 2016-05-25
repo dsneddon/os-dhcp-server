@@ -180,11 +180,15 @@ DHCP_FIELDS = {'op':{'pos':0, 'len':1, 'type': 'int'},
 
 DHCP_OPCODES = { '0': 'ERROR_UNDEF', '1' : 'BOOTREQUEST' , '2' : 'BOOTREPLY'}
 
-DHCP_MESSAGE_TYPES = { '0': 'ERROR_UNDEF', '1': 'DHCP_DISCOVER',
-                        '2': 'DHCP_OFFER', '3' : 'DHCP_REQUEST',
-                        '4':'DHCP_DECLINE', '5': 'DHCP_ACK',
-                        '6': 'DHCP_NACK', '7': 'DHCP_RELEASE',
-                        '8' : 'DHCP_INFORM' }
+DHCP_MESSAGE_TYPES = {'0': 'ERROR_UNDEF', '1': 'DHCP_DISCOVER',
+                      '2': 'DHCP_OFFER', '3' : 'DHCP_REQUEST',
+                      '4':'DHCP_DECLINE', '5': 'DHCP_ACK',
+                      '6': 'DHCP_NACK', '7': 'DHCP_RELEASE',
+                      '8' : 'DHCP_INFORM' }
+
+DHCP_MESSAGE_LIST = ['ERROR_UNDEF', 'DHCP_DISCOVER', 'DHCP_OFFER',
+                     'DHCP_REQUEST', 'DHCP_DECLINE', 'DHCP_ACK',
+                     'DHCP_NACK', 'DHCP_RELEASE', 'DHCP_INFORM']
 
 DHCP_OPTIONS = ['pad',
                  # Vendor Extension
@@ -323,7 +327,7 @@ DHCP_OPTION_TYPES = {
     50: {'max': 4, 'type': 'int32', 'name': 'request_ip_address', 'min': 4},
     51: {'max': 4, 'type': 'int32', 'name': 'ip_address_lease_time', 'min': 4},
     52: {'max': 0, 'type': 'char', 'name': 'overload', 'min': 0},
-    53: {'max': 0, 'type': 'char', 'name': 'dhcp_message_type', 'min': 0},
+    53: {'max': 0, 'type': 'int', 'name': 'dhcp_message_type', 'min': 0},
     54: {'max': 4, 'type': 'int32', 'name': 'server_identifier', 'min': 4},
     55: {'max': 0, 'type': 'char+', 'name': 'param_request_list', 'min': 0},
     56: {'max': 0, 'type': 'string', 'name': 'message', 'min': 1},

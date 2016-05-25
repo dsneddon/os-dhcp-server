@@ -104,6 +104,7 @@ class DhcpServer(object):
         if data:
             packet = dhcp_packet.DhcpPacket(data)
             packet.source_address = source_address
+            logger.debug(packet.str())
         return packet
 
     def listen(self):
