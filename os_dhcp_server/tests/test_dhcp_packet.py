@@ -76,7 +76,6 @@ class TestDhcpPacket(base.TestCase):
         # First, test getting options from a raw decoded packet
         packet = dhcp_packet.DhcpPacket(_DHCP_PACKET_WITH_OPTIONS)
         self.assertEqual(4, packet.get_option('hops'))
-        print(packet.str())
         self.assertEqual('10.0.0.1, 10.0.0.2', packet.get_option('router'))
         self.assertEqual('255.255.255.0', packet.get_option('subnet_mask'))
         self.assertEqual(9154, packet.get_option('interface_mtu'))
@@ -95,18 +94,14 @@ class TestDhcpPacket(base.TestCase):
 
     def test_create_dhcp_offer(self):
         packet = dhcp_packet.DhcpOffer("00:01:02:aa:bb:cc")
-        print "Packet length: %s" % len(packet.packet_data)
         self.assertEqual(2, packet.get_option('op'))
         self.assertEqual("00:01:02:aa:bb:cc", packet.chaddr)
-        print "HERE"
-        print packet.packet_data
-        print packet.packet_data[236:240]
-        print "Magic cookie found at: %s" % packet.get_option_start()
-        print("file: {}".format(packet.get_option('file')))
-        print("chaddr: {}".format(packet.get_option('chaddr')))
         #print(str(packet))
         packet.set_option('chaddr', "00:01:02:aa:bb:cc")
-        print(packet.packet_data)
+        print("file: {}".format(packet.get_option('file')))
+        print("chaddr: {}".format(packet.get_option('chaddr')))
+        print packet.str()
+
 
     # def test_invalid_packets(self):
     #     packet = dhcp_packet.DhcpPacket()

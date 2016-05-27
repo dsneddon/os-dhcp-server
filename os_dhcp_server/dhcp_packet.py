@@ -169,7 +169,7 @@ def bytelist_to_value(optype, bytelist):
     :returns: value after type conversion"""
 
     if optype == 'int':
-        return int(bytelist[0])
+        return bytelist[0]
     elif optype == 'int16':
         if len(bytelist) != 2:
             logger.debug("Could not convert %s bytes to int16")
@@ -217,12 +217,14 @@ def bytelist_to_value(optype, bytelist):
                 new_value += str(__bytelist.pop())
             return new_value
     elif optype == 'string':
-        return ''.join(chr(byte) for byte in bytelist)
-    elif optype == 'identifier' or optype == 'hwmacaddr':  # see RFC6842:
-        if (len(bytelist) == 7) and (bytelist[0] == 1):  # MAC address
-            return ':'.join('{:02x}'.format(x) for x in bytelist)
+        return ''.join(chr(byte) for byte in bytelist).strip('\x00')
+    elif optype == 'identifier':
+        return ''.join('{}'.format(chr(x)) for x in bytelist).strip('\x00')
+    elif optype == 'hwmacaddr':
+        if bytelist[0] == 1:  # MAC address preceded by type
+            return ':'.join('{:02x}'.format(x) for x in bytelist[1:8])
         else:
-            return ''.join('{}'.format(chr(x)) for x in bytelist)
+            return ':'.join('{:02x}'.format(x) for x in bytelist[0:7])
     else:
         return bytelist
 
@@ -302,9 +304,8 @@ class DhcpPacket(object):
         """ Return location after MagicCookie, or None if not found """
 
         # Sometimes it's right where you expect it
-        print "packet_data_length: %s" % len(self.packet_data)
         if len(self.packet_data) > 238:
-            if self.packet_data[237:240] == dhcp.MAGIC_COOKIE:
+            if self.packet_data[236:240] == dhcp.MAGIC_COOKIE:
                 logger.debug("DHCP packet received, contains MagicCookie")
                 return 240
             else:
@@ -337,16 +338,15 @@ class DhcpPacket(object):
             return value
         # Option being retrieved is not one of the main fields
         elif opt_name in dhcp.DHCP_OPTIONS:
-            opt_num = self.get_option_number(opt_name)
-            opt_type = dhcp.DHCP_OPTION_TYPES[opt_num]['type']
-            value = bytelist_to_value(opt_type, self.dhcp_options[opt_name])
-            logger.debug("DHCP option retreived, opt_name: %s, value: %s" %
-                         (opt_name, value))
-            return value
-        else:
-            logger.error("Error: Could not get value for invalid option: %s" %\
-                         opt_name)
-            return None
+            if opt_name in self.dhcp_options:
+                opt_num = self.get_option_number(opt_name)
+                value = self.dhcp_options[opt_name]
+                logger.debug("DHCP option %s read, opt_name: %s, value: %s" %
+                             (opt_num, opt_name, value))
+                return value
+        logger.error("Error: Could not get value for invalid option: %s" %\
+                     opt_name)
+        return None
 
     def set_option(self, opt_name, value):
         """ Set DHCP options (including fields)
@@ -390,7 +390,7 @@ class DhcpPacket(object):
                     logger.error("DhcpPacket field %s value wrong length: %s" %
                                  (opt_name, value))
                     return False
-                self.packet_data[begin:(begin + len(value))] = bytelist
+                self.packet_data[begin:(begin + len(bytelist))] = bytelist
                 logger.debug("DHCP field set, opt_name: %s, value: %s" %
                              (opt_name, value))
                 return True
@@ -498,11 +498,11 @@ class DhcpPacket(object):
 0                   1                   2                   3   |
 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|     op ({})    |   htype ({})   |    hlen ({})   |    hops ({})   |
+|     op ({})    |  htype ({:3})  |   hlen ({:3})  |   hops ({:3})  |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                   xid ( {:<16} )                    |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|           secs ({})           |           flags ({})            |
+|          secs ({:3})          |          flags ({:3})           |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                   ciaddr ( {:<16} )                 |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -512,7 +512,7 @@ class DhcpPacket(object):
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                   giaddr ( {:<16} )                 |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                   chaddr ( {:<16} )                 |
+|                   chaddr ( {:>16} )             |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 | sname ( {:<51} ) |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -532,10 +532,16 @@ class DhcpPacket(object):
         str_rep += "|--------------------------DHCP Options----------------"
         str_rep += "---------|\n"
         for option in self.sort_options():
-            str_rep += "| option {:3}: {:<18} {:>30} |\n".format(
-                    option[0], str(option[1])[0:18], str(option[2])[0:29])
-            if len(str(option[2])) > 30:
-                str_rep += "| {:50} |"
+            opt_val = self.get_option(option[1])
+            str_rep += "| option {:3}: {:<18} {:<30} |\n".format(
+                option[0], str(option[1])[0:18], str(opt_val)[0:29]
+            )
+            x = 30
+            while x < len(str(opt_val)):
+                str_rep += "| {:61} |\n".format(
+                    str(opt_val)[x:x+61]
+                )
+                x = x + 61
         str_rep += "+-----------------------------------------------------"
         str_rep += "----------+"
         return str_rep
@@ -552,20 +558,10 @@ class DhcpOffer(DhcpPacket):
     def __init__(self, chaddr=None, source_address=None, ip_dest=None,
                  data=None):
         super(DhcpOffer, self).__init__(data)
-        print "DHCPOffer packet length: %s" % len(self.packet_data)
         self.source_address = source_address
         self.dhcp_options = {}
         self.ip_dest = ip_dest
         self.chaddr = chaddr
-        # if data:
-        #     if isinstance(data, list):
-        #         self.packet_data = data
-        #         self.map_options()
-        #     if isinstance(data, str):
-        #         self.raw_packet_data = data
-        #         self.decode_packet()
-        # else:
-        #     self.init_packet()
         if self.chaddr:
             self.set_option('chaddr', self.chaddr)
         logger.info("DhcpOffer packet created")
